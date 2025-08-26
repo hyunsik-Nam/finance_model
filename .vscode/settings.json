@@ -1,0 +1,6 @@
+{
+  "github.copilot.chat.commitMessageConvention": "conventional",
+  "git.inputValidation": "always",
+  "git.inputValidationSubjectLength": 50,
+  "git.inputValidationLength": 72
+}
