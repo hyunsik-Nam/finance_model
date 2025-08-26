@@ -28,3 +28,7 @@ def chat_api(
         media_type="text/plain",
         headers={"Cache-Control": "no-cache"}
     )
+
+@router.get("/ping")
+def ping():
+    return {"message": "pong"}
