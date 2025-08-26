@@ -2,6 +2,9 @@ import streamlit as st
 import requests
 import json
 import time
+import os
+
+backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 st.title("Hello  🚀")
 st.write("간단한 챗봇입니다")
@@ -28,7 +31,7 @@ if prompt := st.chat_input("메시지를 입력하세요..."):
         # Streamlit의 내장 spinner 사용
         with st.spinner("work ..."):
             try:
-                response = requests.post("http://localhost:8000/api/v1/test/chat", 
+                response = requests.post(f"{backend_url}/api/v1/test/chat", 
                                params={"msg": prompt}, 
                                stream=True)
 
