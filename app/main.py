@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # 모든 라우터 임포트 (Spring Boot의 Controller 스캔과 같음)
-from app.routers import users, items, orders, finance
+from app.routers import users, items, orders, finance, test_route
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -26,6 +26,8 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["사용자 관리
 app.include_router(items.router, prefix="/api/v1/items", tags=["상품 관리"])  
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["주문 관리"])
 app.include_router(finance.router, prefix="/api/v1/finance", tags=["재무 관리"])
+app.include_router(test_route.router, prefix="/api/v1/test", tags=["테스트 경로"])
+
 
 @app.get("/")
 def root():
@@ -35,7 +37,8 @@ def root():
             "users": "/api/v1/users",
             "items": "/api/v1/items", 
             "orders": "/api/v1/orders",
-            "finance": "/api/v1/finance"
+            "finance": "/api/v1/finance",
+            "test": "/api/v1/test"
         },
         "docs": "/docs"
     }
