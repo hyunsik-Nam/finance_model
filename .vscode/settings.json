@@ -1,5 +1,6 @@
 {
   "github.copilot.chat.commitMessageConvention": "conventional",
+  "github.copilot.chat.localeOverride": "ko",
   "git.inputValidation": "always",
   "git.inputValidationSubjectLength": 50,
   "git.inputValidationLength": 72
