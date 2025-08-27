@@ -47,15 +47,17 @@ class YAMLPromptManager:
         from langchain_core.prompts import ChatPromptTemplate
         
         # 프롬프트 텍스트에 변수 값 삽입
-        prompt_text = prompt_data["prompt"]
+        system_prompt_text = prompt_data["system_prompt"]
+        user_prompt_text = prompt_data.get("user_prompt", "")
         
         # kwargs로 전달된 변수들 적용
         for key, value in kwargs.items():
-            prompt_text = prompt_text.replace(f"{{{key}}}", str(value))
-        
+            system_prompt_text = system_prompt_text.replace(f"{{{key}}}", str(value))
+            user_prompt_text = user_prompt_text.replace(f"{{{key}}}", str(value))
+
         return ChatPromptTemplate.from_messages([
-            ("system", prompt_text),
-            ("user", "{question}")
-        ])
+                ("system", system_prompt_text),
+                ("user", user_prompt_text)
+            ])
 
 # YAML 프롬프트 매니저 초기화
