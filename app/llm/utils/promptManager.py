@@ -4,8 +4,8 @@ from pathlib import Path
 
 class YAMLPromptManager:
     """YAML 프롬프트 파일 관리 클래스"""
-    
-    def __init__(self, prompts_file="prompts/prompts_list.yaml"):
+
+    def __init__(self, prompts_file="app/llm/prompts/prompts_list.yaml"):
         self.prompts_file = prompts_file
         self.prompts = self.load_prompts()
     
@@ -50,14 +50,16 @@ class YAMLPromptManager:
         system_prompt_text = prompt_data["system_prompt"]
         user_prompt_text = prompt_data.get("user_prompt", "")
         
+        variables = prompt_data.get("variables", [])
+
         # kwargs로 전달된 변수들 적용
         for key, value in kwargs.items():
             system_prompt_text = system_prompt_text.replace(f"{{{key}}}", str(value))
             user_prompt_text = user_prompt_text.replace(f"{{{key}}}", str(value))
 
-        return ChatPromptTemplate.from_messages([
+        prompt = ChatPromptTemplate([
                 ("system", system_prompt_text),
                 ("user", user_prompt_text)
             ])
 
-# YAML 프롬프트 매니저 초기화
+        return prompt.partial(**kwargs)

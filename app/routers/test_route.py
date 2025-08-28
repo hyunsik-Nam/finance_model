@@ -6,29 +6,19 @@ from fastapi.responses import StreamingResponse
 import json
 
 router = APIRouter()
+testService = TestService()
 
 @router.post("/chat")
-def chat_api(
-    msg: str,
-    service: TestService = Depends()
-):
+async def chat_api(msg: str):
     """챗 api"""
-    def generate_stream():
-        try:
-            # 서비스에서 스트림 데이터를 받아와서 그대로 전달
-            for chunk in service.get_test_data(msg):
-                yield chunk
-        except Exception as e:
-            # 에러 발생 시 에러 메시지를 스트림으로 전송
-            error_data = {"error": str(e)}
-            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-    
+    generator = testService.get_test_data(msg)
+
     return StreamingResponse(
-        generate_stream(),
-        media_type="text/plain",
+        generator,
+        media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"}
     )
 
 @router.get("/ping")
-def ping():
+async def ping():
     return {"message": "pong"}
