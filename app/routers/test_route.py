@@ -11,10 +11,12 @@ testService = TestService()
 @router.post("/chat")
 async def chat_api(msg: str):
     """챗 api"""
-    generator = testService.get_test_data(msg)
+    async def event_stream():
+        async for chunk in testService.get_test_data(msg):
+            yield chunk
 
     return StreamingResponse(
-        generator,
+        event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"}
     )

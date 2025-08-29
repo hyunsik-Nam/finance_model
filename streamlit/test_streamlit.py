@@ -57,6 +57,7 @@ if prompt := st.chat_input("메시지를 입력하세요..."):
                                         break
                                     
                                     content = data.get("content", "")
+                                    print(content)
                                     full_response += content
                                     message_placeholder.markdown(full_response + "▌")
                                     time.sleep(0.01)  # 약간의 지연 추가
