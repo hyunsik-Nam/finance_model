@@ -67,6 +67,31 @@ yaml_prompt_manager = YAMLPromptManager()
 class LLMServiceGraph:
     def __init__(self):
         pass
+
+
+    def _format_stock_response(self, response):
+        """주식 응답 포맷팅"""
+        return {
+            **response,
+            "type": "stock_advice",
+            "category": "investment"
+        }
+    
+    def _format_general_response(self, response):
+        """일반 응답 포맷팅"""
+        return {
+            **response,
+            "type": "general_advice",
+            "category": "general"
+        }
+    
+    def _format_order_response(self, response):
+        """주문 응답 포맷팅"""
+        return {
+            **response,
+            "type": "order_confirmation",
+            "category": "transaction"
+        }
     
     def _create_langgraph_chain(self):
         """LangGraph 체인 생성"""
@@ -125,9 +150,10 @@ class LLMServiceGraph:
             try:
                 classification = state["stock_classification"]
                 parsed_data = parse_stock_info(classification)
-                result = (structured_llm | order_stock).invoke(parsed_data)
+                result = (structured_llm | order_stock | RunnableLambda(self._format_order_response)).invoke(parsed_data)
+                print(f"result : {result}")
                 
-                return {**state, "final_result": result}
+                return {**state, "final_result": result,"type":"order_confirmation"}
             except Exception as e:
                 return {**state, "error": str(e)}
 
@@ -135,9 +161,9 @@ class LLMServiceGraph:
             """STOCK_GENERAL 처리"""
             try:
                 question = state["question"]
-                result = (stock_prompt(question) | model | json_parser).invoke({"question": question})
-                
-                return {**state, "final_result": result}
+                result = (stock_prompt(question) | model | json_parser | RunnableLambda(self._format_stock_response)).invoke({"question": question})
+
+                return {**state, "final_result": result,"type":"stock_advice"}
             except Exception as e:
                 return {**state, "error": str(e)}
 
@@ -145,9 +171,9 @@ class LLMServiceGraph:
             """GENERAL 처리"""
             try:
                 question = state["question"]
-                result = (general_prompt(question) | model | json_parser).invoke({"question": question})
-                
-                return {**state, "final_result": result}
+                result = (general_prompt(question) | model | json_parser | RunnableLambda(self._format_general_response)).invoke({"question": question})
+
+                return {**state, "final_result": result,"type":"general_advice"}
             except Exception as e:
                 return {**state, "error": str(e)}
 
@@ -236,21 +262,48 @@ class LLMServiceGraph:
             
             # 스트리밍으로 실행
             async for chunk in graph.astream(
-                {"question": question}, 
-                config={"callbacks": callbacks}
+                {"question": question}
+                # , 
+                # config={"callbacks": callbacks}
             ):
                 # 각 노드의 출력 처리
                 for node_name, node_output in chunk.items():
+                    print(f"Node {node_name} output: {node_output}")
+
+                    if node_name == "classify_main":
+                        route = node_output.get("route", "")
+                        if route == "STOCK":
+                            feedback = {"content": "📈 주식 관련 질문으로 분류되었습니다...\n\n"}
+                            yield f"data: {json.dumps(feedback, ensure_ascii=False)}\n\n"
+                        elif route == "GENERAL":
+                            feedback = {"content": "💬 일반 상담으로 분류되었습니다...\n\n"}
+                            yield f"data: {json.dumps(feedback, ensure_ascii=False)}\n\n"
+
                     if node_name in ["process_stock_order", "process_stock_general", "process_general", "handle_error"]:
+
                         # 최종 결과가 있는 경우만 스트리밍
                         final_result = node_output.get("final_result")
+                        print(f"Final result: {final_result}")
                         if final_result:
+
+                            # 타입별 이모지 추가
+                            type_emojis = {
+                                "stock_advice": "📊 ",
+                                "general_advice": "💡 ",
+                                "order_confirmation": "✅ ",
+                                "error": "❌ "
+                            }
+                            prefix = type_emojis.get(final_result.get("type"), "")
+                            for char in prefix:
+                                yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
+
                             # 결과를 적절히 스트리밍
                             if isinstance(final_result, dict):
                                 content = final_result.get("content", "")
                                 if isinstance(content, dict):
                                     content_str = json.dumps(content, ensure_ascii=False)
-                                    yield f"data: {json.dumps({'content': content_str}, ensure_ascii=False)}\n\n"
+                                    for char in content_str:
+                                        yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
                                 else:
                                     # 문자별로 스트리밍
                                     for char in str(content):
@@ -266,51 +319,3 @@ class LLMServiceGraph:
             error_data = {"content": f"오류가 발생했습니다: {str(e)}"}
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
-
-    # 기존 방식과의 호환성을 위한 메소드
-    def _create_routing_chain(self):
-        """기존 RunnableBranch 방식 (호환성 유지)"""
-        # 프롬프트 함수들
-        def stock_prompt(question: str):
-            context = 'test입니다'
-            prompt = yaml_prompt_manager.create_chat_prompt("stock_advisor", context=context, question=question)
-            return prompt
-
-        def general_prompt(question: str):
-            context = 'test입니다'
-            prompt = yaml_prompt_manager.create_chat_prompt("general_advisor", context=context, question=question)
-            return prompt
-
-        def extract_content(chunk):
-            print("extract_content:", chunk)
-            return chunk
-        
-        # 분류기
-        classifier = yaml_prompt_manager.create_chat_prompt("stock_general_branch_prompt") | model
-        stock_classifier = yaml_prompt_manager.create_chat_prompt("stock_order_branch") | model.with_structured_output(OrderClassifier)
-        
-
-        def wrap_stock_data(data):
-            return {"stock_data": data}
-
-        # RunnableBranch 방식 (기존 코드와 동일)
-        from langchain_core.runnables import RunnableBranch
-        
-        routing_chain = RunnableBranch(
-            (
-                # STOCK 여부 체크
-                lambda x: "STOCK" in classifier.invoke({"question": x["question"]}).content.upper(),
-                RunnableBranch(
-                    (
-                        # STOCK_ORDER 체크
-                        lambda x: "STOCK_ORDER" == stock_classifier.invoke({"question": x["question"]}).get("type").upper(),
-                        RunnableLambda(parse_stock_info) | structured_llm | order_stock
-                    ),
-                    # 기본값 (다른 STOCK 관련)
-                    lambda x: stock_prompt(x["question"]) | model | json_parser
-                )
-            ),
-            lambda x: general_prompt(x["question"]) | model | json_parser
-        )
-        
-        return routing_chain

@@ -11,7 +11,7 @@ def parse_stock_info(data):
     return result
 
 @tool
-def order_stock(content:dict) -> dict:
+def order_stock(content:str) -> dict:
     """ 주식을 주문하는 함수입니다"""
     print("Order data:", content)
 
