@@ -10,17 +10,17 @@ def parse_stock_info(data):
     print(f"Modified data: {result}")
     return result
 
-@tool
-def order_stock(content:str) -> dict:
-    """ 주식을 주문하는 함수입니다"""
-    print("Order data:", content)
+# @tool
+# def order_stock(content:str) -> dict:
+#     """ 주식을 주문하는 함수입니다"""
+#     print("Order data:", content)
 
-    return {
-        "content": {
-            "status": "success",
-            "message": f"{content['stock']} 주문 완료"
-        }
-    }
+#     return {
+#         "content": {
+#             "status": "success",
+#             "message": f"{content['stock']} 주문 완료"
+#         }
+#     }
 
 async def test():
     print("hi")

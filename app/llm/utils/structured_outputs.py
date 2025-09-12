@@ -17,6 +17,8 @@ class StockStruct(TypedDict):
     target_price: Annotated[float, None, "목표 주식 가격", "example=1200.0"]
     stop_loss: Annotated[Optional[float], None, "손절가", "example=900.0"]
     take_profit: Annotated[Optional[float], None, "익절가", "example=1100.0"]
+    cnt: Annotated[int, ..., "주식 수량 (정수만 허용)", "example=10"]
+    action: Annotated[str, ..., "주식 주문 액션", "example=BUY, 매수"]
 
 class FinalStockStruct(TypedDict):
     """ 최종 주식정보를 담는 데이터 구조 """

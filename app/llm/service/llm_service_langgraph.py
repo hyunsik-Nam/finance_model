@@ -1,67 +1,70 @@
-import getpass
-import os
-from typing import Any, Dict, List, TypedDict, Literal
+# import getpass
+# import os
+# from typing import Any, Dict, List, TypedDict, Literal
 import json
 
-from dotenv import load_dotenv
-from langchain.chat_models import init_chat_model
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import BaseMessage
-from langchain_core.outputs import LLMResult
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableLambda
-from langchain.output_parsers.json import SimpleJsonOutputParser
+# from dotenv import load_dotenv
+# from langchain.chat_models import init_chat_model
+# from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+# from langchain_core.messages import HumanMessage, AIMessage
+# from langchain_core.callbacks import BaseCallbackHandler
+# from langchain_core.messages import BaseMessage
+# from langchain_core.outputs import LLMResult
+# from langchain_core.prompts import ChatPromptTemplate
+# from langchain_core.runnables import RunnableLambda
+# from langchain.output_parsers.json import SimpleJsonOutputParser
 
-# LangGraph imports
+# # LangGraph imports
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages
 
-# Your existing imports
-from ..utils.promptManager import YAMLPromptManager
-from ..utils.structured_outputs import StockStruct, FinalStockStruct, OrderClassifier
-from ..utils.llm_tools import *
+# # Your existing imports
+# from ..utils.promptManager import YAMLPromptManager
+# from ..utils.structured_outputs import StockStruct, FinalStockStruct, OrderClassifier
+# from ..utils.llm_tools import *
 
-load_dotenv()
+from ..utils.route_function import *
+from ..utils.node_function import *
 
-if not os.environ.get("GOOGLE_API_KEY"):
-    os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter API key for Google Gemini: ")
+# load_dotenv()
+
+# if not os.environ.get("GOOGLE_API_KEY"):
+#     os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter API key for Google Gemini: ")
 
 
-class LoggingHandler(BaseCallbackHandler):
-    def on_chat_model_start(
-        self, serialized: Dict[str, Any], messages: List[List[BaseMessage]], **kwargs
-    ) -> None:
-        print("Chat model started")
+# class LoggingHandler(BaseCallbackHandler):
+#     def on_chat_model_start(
+#         self, serialized: Dict[str, Any], messages: List[List[BaseMessage]], **kwargs
+#     ) -> None:
+#         print("Chat model started")
 
-    def on_llm_end(self, response: LLMResult, **kwargs) -> None:
-        print(f"Chat model ended, response: {response}")
+#     def on_llm_end(self, response: LLMResult, **kwargs) -> None:
+#         print(f"Chat model ended, response: {response}")
 
-    def on_chain_start(
-        self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs
-    ) -> None:
-        print(f"Chain {serialized.get('name')} started")
+#     def on_chain_start(
+#         self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs
+#     ) -> None:
+#         print(f"Chain {serialized.get('name')} started")
 
-    def on_chain_end(self, outputs: Dict[str, Any], **kwargs) -> None:
-        print(f"Chain ended, outputs: {outputs}")
+#     def on_chain_end(self, outputs: Dict[str, Any], **kwargs) -> None:
+#         print(f"Chain ended, outputs: {outputs}")
 
 
 # State 정의
-class AdvisorState(TypedDict):
-    question: str
-    main_classification: dict
-    stock_classification: dict
-    route: str
-    final_result: Any
-    error: str
+# class AdvisorState(TypedDict):
+#     question: str
+#     main_classification: dict
+#     stock_classification: dict
+#     route: str
+#     final_result: Any
+#     error: str
 
 
-callbacks = [LoggingHandler()]
-model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
-json_parser = SimpleJsonOutputParser()
-structured_llm = model.with_structured_output(FinalStockStruct)
-yaml_prompt_manager = YAMLPromptManager()
+# callbacks = [LoggingHandler()]
+# model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
+# json_parser = SimpleJsonOutputParser()
+# structured_llm = model.with_structured_output(FinalStockStruct)
+# yaml_prompt_manager = YAMLPromptManager()
 
 
 class LLMServiceGraph:
@@ -69,142 +72,143 @@ class LLMServiceGraph:
         pass
 
 
-    def _format_stock_response(self, response):
-        """주식 응답 포맷팅"""
-        return {
-            **response,
-            "type": "stock_advice",
-            "category": "investment"
-        }
+    # def _format_stock_response(self, response):
+    #     """주식 응답 포맷팅"""
+    #     return {
+    #         **response,
+    #         "type": "stock_advice",
+    #         "category": "investment"
+    #     }
     
-    def _format_general_response(self, response):
-        """일반 응답 포맷팅"""
-        return {
-            **response,
-            "type": "general_advice",
-            "category": "general"
-        }
+    # def _format_general_response(self, response):
+    #     """일반 응답 포맷팅"""
+    #     return {
+    #         **response,
+    #         "type": "general_advice",
+    #         "category": "general"
+    #     }
     
-    def _format_order_response(self, response):
-        """주문 응답 포맷팅"""
-        return {
-            **response,
-            "type": "order_confirmation",
-            "category": "transaction"
-        }
+    # def _format_order_response(self, response):
+    #     """주문 응답 포맷팅"""
+    #     return {
+    #         **response,
+    #         "type": "order_confirmation",
+    #         "category": "transaction"
+    #     }
     
     def _create_langgraph_chain(self):
         """LangGraph 체인 생성"""
         
-        # 프롬프트 함수들
-        def stock_prompt(question: str):
-            context = 'test입니다'
-            prompt = yaml_prompt_manager.create_chat_prompt("stock_advisor", context=context, question=question)
-            return prompt
+        # # 프롬프트 함수들
+        # def stock_prompt(question: str):
+        #     context = 'test입니다'
+        #     prompt = yaml_prompt_manager.create_chat_prompt("stock_advisor", context=context, question=question)
+        #     return prompt
 
-        def general_prompt(question: str):
-            context = 'test입니다'
-            prompt = yaml_prompt_manager.create_chat_prompt("general_advisor", context=context, question=question)
-            return prompt
+        # def general_prompt(question: str):
+        #     context = 'test입니다'
+        #     prompt = yaml_prompt_manager.create_chat_prompt("general_advisor", context=context, question=question)
+        #     return prompt
 
-        # 분류기들
-        classifier = yaml_prompt_manager.create_chat_prompt("stock_general_branch_prompt") | model
-        stock_classifier = yaml_prompt_manager.create_chat_prompt("stock_order_branch") | model.with_structured_output(OrderClassifier)
+        # # 분류기들
+        # classifier = yaml_prompt_manager.create_chat_prompt("stock_general_branch_prompt") | model
+        # stock_classifier = yaml_prompt_manager.create_chat_prompt("stock_order_branch") | model.with_structured_output(OrderClassifier)
 
-        # 노드 함수들
-        def classify_main(state: AdvisorState) -> AdvisorState:
-            """1차 분류: STOCK vs GENERAL"""
-            try:
-                question = state["question"]
-                main_result = classifier.invoke({"question": question})
+        # # 노드 함수들
+        # def classify_main(state: AdvisorState) -> AdvisorState:
+        #     """1차 분류: STOCK vs GENERAL"""
+        #     try:
+        #         question = state["question"]
+        #         main_result = classifier.invoke({"question": question})
                 
-                is_stock = "STOCK" in main_result.content.upper()
-                route = "STOCK" if is_stock else "GENERAL"
+        #         is_stock = "STOCK" in main_result.content.upper()
+        #         route = "STOCK" if is_stock else "GENERAL"
                 
-                return {
-                    **state,
-                    "main_classification": {"content": main_result.content, "is_stock": is_stock},
-                    "route": route
-                }
-            except Exception as e:
-                return {**state, "error": str(e), "route": "ERROR"}
+        #         return {
+        #             **state,
+        #             "main_classification": {"content": main_result.content, "is_stock": is_stock},
+        #             "route": route
+        #         }
+        #     except Exception as e:
+        #         return {**state, "error": str(e), "route": "ERROR"}
 
-        def classify_stock(state: AdvisorState) -> AdvisorState:
-            """2차 분류: STOCK_ORDER vs STOCK_GENERAL"""
-            try:
-                question = state["question"]
-                stock_result = stock_classifier.invoke({"question": question})
+        # def classify_stock(state: AdvisorState) -> AdvisorState:
+        #     """2차 분류: STOCK_ORDER vs STOCK_GENERAL"""
+        #     try:
+        #         question = state["question"]
+        #         stock_result = stock_classifier.invoke({"question": question})
                 
-                stock_type = stock_result.get("type", "").upper()
+        #         stock_type = stock_result.get("type", "").upper()
                 
-                return {
-                    **state,
-                    "stock_classification": stock_result,
-                    "route": stock_type
-                }
-            except Exception as e:
-                return {**state, "error": str(e), "route": "ERROR"}
+        #         return {
+        #             **state,
+        #             "stock_classification": stock_result,
+        #             "route": stock_type
+        #         }
+        #     except Exception as e:
+        #         return {**state, "error": str(e), "route": "ERROR"}
 
-        def process_stock_order(state: AdvisorState) -> AdvisorState:
-            """STOCK_ORDER 처리"""
-            try:
-                classification = state["stock_classification"]
-                parsed_data = parse_stock_info(classification)
-                result = (structured_llm | order_stock | RunnableLambda(self._format_order_response)).invoke(parsed_data)
-                print(f"result : {result}")
+        # def process_stock_order(state: AdvisorState) -> AdvisorState:
+        #     """STOCK_ORDER 처리"""
+        #     try:
+        #         classification = state["stock_classification"]
+        #         # parsed_data = parse_stock_info(classification)
+        #         # result = (structured_llm | order_stock | RunnableLambda(self._format_order_response)).invoke(classification)
+        #         result = (structured_llm).invoke(classification)
+        #         print(f"result : {result}")
                 
-                return {**state, "final_result": result,"type":"order_confirmation"}
-            except Exception as e:
-                return {**state, "error": str(e)}
+        #         return {**state, "final_result": result,"type":"order_confirmation"}
+        #     except Exception as e:
+        #         return {**state, "error": str(e)}
 
-        def process_stock_general(state: AdvisorState) -> AdvisorState:
-            """STOCK_GENERAL 처리"""
-            try:
-                question = state["question"]
-                result = (stock_prompt(question) | model | json_parser | RunnableLambda(self._format_stock_response)).invoke({"question": question})
+        # def process_stock_general(state: AdvisorState) -> AdvisorState:
+        #     """STOCK_GENERAL 처리"""
+        #     try:
+        #         question = state["question"]
+        #         result = (stock_prompt(question) | model | json_parser | RunnableLambda(self._format_stock_response)).invoke({"question": question})
 
-                return {**state, "final_result": result,"type":"stock_advice"}
-            except Exception as e:
-                return {**state, "error": str(e)}
+        #         return {**state, "final_result": result,"type":"stock_advice"}
+        #     except Exception as e:
+        #         return {**state, "error": str(e)}
 
-        def process_general(state: AdvisorState) -> AdvisorState:
-            """GENERAL 처리"""
-            try:
-                question = state["question"]
-                result = (general_prompt(question) | model | json_parser | RunnableLambda(self._format_general_response)).invoke({"question": question})
+        # def process_general(state: AdvisorState) -> AdvisorState:
+        #     """GENERAL 처리"""
+        #     try:
+        #         question = state["question"]
+        #         result = (general_prompt(question) | model | json_parser | RunnableLambda(self._format_general_response)).invoke({"question": question})
 
-                return {**state, "final_result": result,"type":"general_advice"}
-            except Exception as e:
-                return {**state, "error": str(e)}
+        #         return {**state, "final_result": result,"type":"general_advice"}
+        #     except Exception as e:
+        #         return {**state, "error": str(e)}
 
-        def handle_error(state: AdvisorState) -> AdvisorState:
-            """에러 처리"""
-            error_result = {
-                "content": f"오류가 발생했습니다: {state.get('error', '알 수 없는 오류')}",
-                "type": "error"
-            }
-            return {**state, "final_result": error_result}
+        # def handle_error(state: AdvisorState) -> AdvisorState:
+        #     """에러 처리"""
+        #     error_result = {
+        #         "content": f"오류가 발생했습니다: {state.get('error', '알 수 없는 오류')}",
+        #         "type": "error"
+        #     }
+        #     return {**state, "final_result": error_result}
 
         # 라우팅 함수들
-        def route_after_main_classification(state: AdvisorState) -> Literal["classify_stock", "process_general", "handle_error"]:
-            """메인 분류 후 라우팅"""
-            route = state.get("route", "")
-            if route == "ERROR":
-                return "handle_error"
-            elif route == "STOCK":
-                return "classify_stock"
-            else:
-                return "process_general"
+        # def route_after_main_classification(state: AdvisorState) -> Literal["classify_stock", "process_general", "handle_error"]:
+        #     """메인 분류 후 라우팅"""
+        #     route = state.get("route", "")
+        #     if route == "ERROR":
+        #         return "handle_error"
+        #     elif route == "STOCK":
+        #         return "classify_stock"
+        #     else:
+        #         return "process_general"
 
-        def route_after_stock_classification(state: AdvisorState) -> Literal["process_stock_order", "process_stock_general", "handle_error"]:
-            """주식 분류 후 라우팅"""
-            route = state.get("route", "")
-            if route == "ERROR":
-                return "handle_error"
-            elif route == "STOCK_ORDER":
-                return "process_stock_order"
-            else:
-                return "process_stock_general"
+        # def route_after_stock_classification(state: AdvisorState) -> Literal["process_stock_order", "process_stock_general", "handle_error"]:
+        #     """주식 분류 후 라우팅"""
+        #     route = state.get("route", "")
+        #     if route == "ERROR":
+        #         return "handle_error"
+        #     elif route == "STOCK_ORDER":
+        #         return "process_stock_order"
+        #     else:
+        #         return "process_stock_general"
 
         # 그래프 생성
         workflow = StateGraph(AdvisorState)
