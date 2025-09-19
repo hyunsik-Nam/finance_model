@@ -2,6 +2,7 @@ import getpass
 import os
 from typing import Any, Dict, List
 from .advisor_types import AdvisorState
+from ...services.finanace import MarketDataManager
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
@@ -174,6 +175,12 @@ def handle_error(state: AdvisorState) -> AdvisorState:
 def order_stock_handler(structured_result: FinalStockStruct) -> dict:
     """structured_llm 결과에서 주문 처리"""
     data = structured_result['content']
+
+    market_manager = MarketDataManager()
+    symbol = market_manager.search_korean_stock_symbol(data.get('stock'))
+    print(f"symbol : {symbol}")
+    data1 = market_manager.get_stock_data(symbol)
+    print(f"data1 : {data1}")
 
     return {
         "status": "success",

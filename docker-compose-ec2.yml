@@ -1,0 +1,31 @@
+services:
+  finance-api:
+    image: finance_model-fastapi:latest # 빌드된 이미지 사용
+    container_name: finance-api
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - APP_NAME=finance
+      - DEBUG=False
+    restart: unless-stopped
+    network_mode: "host"
+
+  streamlit-app:
+    image: finance_model-fastapi:latest # 빌드된 이미지 사용
+    container_name: streamlit-app
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://finance-api:8000
+    depends_on:
+      - finance-api
+    restart: unless-stopped
+    network_mode: "host"
+
+networks:
+  finance-network:
+    driver: bridge
