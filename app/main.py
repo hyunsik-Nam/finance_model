@@ -1,9 +1,12 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from dotenv import load_dotenv
 
 # 모든 라우터 임포트 (Spring Boot의 Controller 스캔과 같음)
 from app.routers import users, items, orders, finance, test_route
+
+load_dotenv()
 
 # FastAPI 앱 생성
 app = FastAPI(
