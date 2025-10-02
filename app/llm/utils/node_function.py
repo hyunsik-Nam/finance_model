@@ -9,6 +9,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
 from langchain.output_parsers.json import SimpleJsonOutputParser
+import asyncio
 
 from ..utils.promptManager import YAMLPromptManager
 from ..utils.structured_outputs import FinalStockStruct, OrderClassifier
@@ -94,17 +95,15 @@ async def process_stock_with_handlers(state: AdvisorState) -> AdvisorState:
         print(f"❌ Handler processing error: {e}")
         return {**state, "error": str(e)}
 
-def process_general(state: AdvisorState) -> AdvisorState:
+async def process_general(state: AdvisorState) -> AdvisorState:
     """일반 상담 처리"""
     try:
         # 일반 상담도 Handler를 통해 처리
         handler = handler_registry.get_handler_by_name("general_advice")
         
         if handler:
-            # 동기 처리를 위해 asyncio 사용
-            import asyncio
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(handler.handle(state))
+            print(f"🎯 선택된 Handler: {handler.handler_name}")
+            return await handler.handle(state)
         else:
             raise Exception("General advice handler를 찾을 수 없습니다")
             
