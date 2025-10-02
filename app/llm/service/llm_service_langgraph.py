@@ -1,223 +1,94 @@
-# import getpass
-# import os
-# from typing import Any, Dict, List, TypedDict, Literal
 import json
+import asyncio
+from typing import Any, Dict, List, Optional
 
-# from dotenv import load_dotenv
-# from langchain.chat_models import init_chat_model
-# from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-# from langchain_core.messages import HumanMessage, AIMessage
-# from langchain_core.callbacks import BaseCallbackHandler
-# from langchain_core.messages import BaseMessage
-# from langchain_core.outputs import LLMResult
-# from langchain_core.prompts import ChatPromptTemplate
-# from langchain_core.runnables import RunnableLambda
-# from langchain.output_parsers.json import SimpleJsonOutputParser
-
-# # LangGraph imports
 from langgraph.graph import StateGraph, END, START
-from langgraph.graph.message import add_messages
+from langchain_core.callbacks import BaseCallbackHandler
 
-# # Your existing imports
-# from ..utils.promptManager import YAMLPromptManager
-# from ..utils.structured_outputs import StockStruct, FinalStockStruct, OrderClassifier
-# from ..utils.llm_tools import *
-
+from ..utils.advisor_types import AdvisorState
 from ..utils.route_function import *
 from ..utils.node_function import *
+from ..handlers.handler_registry import handler_registry
 
-# load_dotenv()
-
-# if not os.environ.get("GOOGLE_API_KEY"):
-#     os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter API key for Google Gemini: ")
-
-
-# class LoggingHandler(BaseCallbackHandler):
-#     def on_chat_model_start(
-#         self, serialized: Dict[str, Any], messages: List[List[BaseMessage]], **kwargs
-#     ) -> None:
-#         print("Chat model started")
-
-#     def on_llm_end(self, response: LLMResult, **kwargs) -> None:
-#         print(f"Chat model ended, response: {response}")
-
-#     def on_chain_start(
-#         self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs
-#     ) -> None:
-#         print(f"Chain {serialized.get('name')} started")
-
-#     def on_chain_end(self, outputs: Dict[str, Any], **kwargs) -> None:
-#         print(f"Chain ended, outputs: {outputs}")
-
-
-# State 정의
-# class AdvisorState(TypedDict):
-#     question: str
-#     main_classification: dict
-#     stock_classification: dict
-#     route: str
-#     final_result: Any
-#     error: str
-
-
-# callbacks = [LoggingHandler()]
-# model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
-# json_parser = SimpleJsonOutputParser()
-# structured_llm = model.with_structured_output(FinalStockStruct)
-# yaml_prompt_manager = YAMLPromptManager()
-
+class LangGraphCallbackHandler(BaseCallbackHandler):
+    """LangGraph 전용 콜백 Handler"""
+    
+    def __init__(self, stream_callback=None):
+        self.stream_callback = stream_callback
+    
+    def on_chain_start(self, serialized: Optional[Dict[str, Any]], inputs: Dict[str, Any], **kwargs) -> None:
+        """체인 시작 시 콜백 - None 안전성 확보"""
+        try:
+            # serialized가 None인 경우 처리
+            if serialized is None:
+                node_name = "unknown_chain"
+            else:
+                node_name = serialized.get("name", "unknown") if isinstance(serialized, dict) else "unknown"
+            
+            print(f"🚀 노드 '{node_name}' 시작")
+            
+            if self.stream_callback:
+                self.stream_callback(f"⏳ {node_name} 처리 중...")
+                
+        except Exception as e:
+            print(f"❌ on_chain_start 콜백 오류: {e}")
+    
+    def on_chain_end(self, outputs: Dict[str, Any], **kwargs) -> None:
+        """체인 종료 시 콜백"""
+        try:
+            print("✅ 노드 처리 완료")
+        except Exception as e:
+            print(f"❌ on_chain_end 콜백 오류: {e}")
+    
+    def on_chain_error(self, error: Exception, **kwargs) -> None:
+        """체인 오류 시 콜백"""
+        try:
+            print(f"❌ 노드 오류: {error}")
+            
+            if self.stream_callback:
+                self.stream_callback(f"❌ 오류 발생: {str(error)}")
+        except Exception as e:
+            print(f"❌ on_chain_error 콜백 오류: {e}")
+    
+    def on_llm_start(self, serialized: Optional[Dict[str, Any]], prompts: List[str], **kwargs) -> None:
+        """LLM 시작 시 콜백"""
+        try:
+            print("🤖 LLM 모델 호출 시작")
+            
+            if self.stream_callback:
+                self.stream_callback("🤖 AI 모델 분석 중...")
+        except Exception as e:
+            print(f"❌ on_llm_start 콜백 오류: {e}")
+    
+    def on_llm_end(self, response: Any, **kwargs) -> None:
+        """LLM 종료 시 콜백"""
+        try:
+            print("🎯 LLM 모델 응답 완료")
+        except Exception as e:
+            print(f"❌ on_llm_end 콜백 오류: {e}")
 
 class LLMServiceGraph:
+    """LangGraph + Handler 통합 서비스"""
+    
     def __init__(self):
-        pass
-
-
-    # def _format_stock_response(self, response):
-    #     """주식 응답 포맷팅"""
-    #     return {
-    #         **response,
-    #         "type": "stock_advice",
-    #         "category": "investment"
-    #     }
+        self.graph = None
+        self._callbacks = []
     
-    # def _format_general_response(self, response):
-    #     """일반 응답 포맷팅"""
-    #     return {
-    #         **response,
-    #         "type": "general_advice",
-    #         "category": "general"
-    #     }
+    def _setup_callbacks(self, stream_callback=None):
+        """콜백 Handler 설정"""
+        self._callbacks = [LangGraphCallbackHandler(stream_callback)]
+        return self._callbacks
     
-    # def _format_order_response(self, response):
-    #     """주문 응답 포맷팅"""
-    #     return {
-    #         **response,
-    #         "type": "order_confirmation",
-    #         "category": "transaction"
-    #     }
-    
-    def _create_langgraph_chain(self):
-        """LangGraph 체인 생성"""
+    def _create_langgraph_chain(self, callbacks=None):
+        """LangGraph 체인 생성 - Handler 통합"""
         
-        # # 프롬프트 함수들
-        # def stock_prompt(question: str):
-        #     context = 'test입니다'
-        #     prompt = yaml_prompt_manager.create_chat_prompt("stock_advisor", context=context, question=question)
-        #     return prompt
-
-        # def general_prompt(question: str):
-        #     context = 'test입니다'
-        #     prompt = yaml_prompt_manager.create_chat_prompt("general_advisor", context=context, question=question)
-        #     return prompt
-
-        # # 분류기들
-        # classifier = yaml_prompt_manager.create_chat_prompt("stock_general_branch_prompt") | model
-        # stock_classifier = yaml_prompt_manager.create_chat_prompt("stock_order_branch") | model.with_structured_output(OrderClassifier)
-
-        # # 노드 함수들
-        # def classify_main(state: AdvisorState) -> AdvisorState:
-        #     """1차 분류: STOCK vs GENERAL"""
-        #     try:
-        #         question = state["question"]
-        #         main_result = classifier.invoke({"question": question})
-                
-        #         is_stock = "STOCK" in main_result.content.upper()
-        #         route = "STOCK" if is_stock else "GENERAL"
-                
-        #         return {
-        #             **state,
-        #             "main_classification": {"content": main_result.content, "is_stock": is_stock},
-        #             "route": route
-        #         }
-        #     except Exception as e:
-        #         return {**state, "error": str(e), "route": "ERROR"}
-
-        # def classify_stock(state: AdvisorState) -> AdvisorState:
-        #     """2차 분류: STOCK_ORDER vs STOCK_GENERAL"""
-        #     try:
-        #         question = state["question"]
-        #         stock_result = stock_classifier.invoke({"question": question})
-                
-        #         stock_type = stock_result.get("type", "").upper()
-                
-        #         return {
-        #             **state,
-        #             "stock_classification": stock_result,
-        #             "route": stock_type
-        #         }
-        #     except Exception as e:
-        #         return {**state, "error": str(e), "route": "ERROR"}
-
-        # def process_stock_order(state: AdvisorState) -> AdvisorState:
-        #     """STOCK_ORDER 처리"""
-        #     try:
-        #         classification = state["stock_classification"]
-        #         # parsed_data = parse_stock_info(classification)
-        #         # result = (structured_llm | order_stock | RunnableLambda(self._format_order_response)).invoke(classification)
-        #         result = (structured_llm).invoke(classification)
-        #         print(f"result : {result}")
-                
-        #         return {**state, "final_result": result,"type":"order_confirmation"}
-        #     except Exception as e:
-        #         return {**state, "error": str(e)}
-
-        # def process_stock_general(state: AdvisorState) -> AdvisorState:
-        #     """STOCK_GENERAL 처리"""
-        #     try:
-        #         question = state["question"]
-        #         result = (stock_prompt(question) | model | json_parser | RunnableLambda(self._format_stock_response)).invoke({"question": question})
-
-        #         return {**state, "final_result": result,"type":"stock_advice"}
-        #     except Exception as e:
-        #         return {**state, "error": str(e)}
-
-        # def process_general(state: AdvisorState) -> AdvisorState:
-        #     """GENERAL 처리"""
-        #     try:
-        #         question = state["question"]
-        #         result = (general_prompt(question) | model | json_parser | RunnableLambda(self._format_general_response)).invoke({"question": question})
-
-        #         return {**state, "final_result": result,"type":"general_advice"}
-        #     except Exception as e:
-        #         return {**state, "error": str(e)}
-
-        # def handle_error(state: AdvisorState) -> AdvisorState:
-        #     """에러 처리"""
-        #     error_result = {
-        #         "content": f"오류가 발생했습니다: {state.get('error', '알 수 없는 오류')}",
-        #         "type": "error"
-        #     }
-        #     return {**state, "final_result": error_result}
-
-        # 라우팅 함수들
-        # def route_after_main_classification(state: AdvisorState) -> Literal["classify_stock", "process_general", "handle_error"]:
-        #     """메인 분류 후 라우팅"""
-        #     route = state.get("route", "")
-        #     if route == "ERROR":
-        #         return "handle_error"
-        #     elif route == "STOCK":
-        #         return "classify_stock"
-        #     else:
-        #         return "process_general"
-
-        # def route_after_stock_classification(state: AdvisorState) -> Literal["process_stock_order", "process_stock_general", "handle_error"]:
-        #     """주식 분류 후 라우팅"""
-        #     route = state.get("route", "")
-        #     if route == "ERROR":
-        #         return "handle_error"
-        #     elif route == "STOCK_ORDER":
-        #         return "process_stock_order"
-        #     else:
-        #         return "process_stock_general"
-
         # 그래프 생성
         workflow = StateGraph(AdvisorState)
 
         # 노드 추가
         workflow.add_node("classify_main", classify_main)
         workflow.add_node("classify_stock", classify_stock)
-        workflow.add_node("process_stock_order", process_stock_order)
-        workflow.add_node("process_stock_general", process_stock_general)
+        workflow.add_node("process_stock_with_handlers", process_stock_with_handlers)
         workflow.add_node("process_general", process_general)
         workflow.add_node("handle_error", handle_error)
 
@@ -235,91 +106,165 @@ class LLMServiceGraph:
             }
         )
 
-        # 주식 분류 후 조건부 라우팅
+        # 주식 분류 후 Handler 노드로 라우팅
         workflow.add_conditional_edges(
             "classify_stock",
             route_after_stock_classification,
             {
-                "process_stock_order": "process_stock_order",
-                "process_stock_general": "process_stock_general",
+                "process_stock_with_handlers": "process_stock_with_handlers",
                 "handle_error": "handle_error"
             }
         )
 
         # 모든 처리 노드에서 END로
-        workflow.add_edge("process_stock_order", END)
-        workflow.add_edge("process_stock_general", END)
+        workflow.add_edge("process_stock_with_handlers", END)
         workflow.add_edge("process_general", END)
         workflow.add_edge("handle_error", END)
 
+        # 콜백은 compile 시가 아닌 invoke/stream 시에 설정
         return workflow.compile()
 
-    async def advisor_stream(self, question):
-        """상담 스트림 (LangGraph 버전)"""
+    async def advisor_stream(self, question: str):
+        """상담 스트림 (LangGraph + Handler 통합)"""
         try:
-            # 먼저 분류 메시지 전송
-            classification_data = {"content": f"상담을 시작합니다.\n\n"}
+            # 스트리밍 콜백
+            stream_messages = []
+            
+            def stream_callback(message: str):
+                stream_messages.append(message)
+            
+            # 콜백 설정
+            callbacks = self._setup_callbacks(stream_callback)
+            
+            # 초기 메시지
+            classification_data = {"content": "🚀 AI 상담사가 질문을 분석합니다...\n\n"}
             yield f"data: {json.dumps(classification_data, ensure_ascii=False)}\n\n"
 
-            # LangGraph 실행
+            # LangGraph 생성
             graph = self._create_langgraph_chain()
             
-            # 스트리밍으로 실행
+            # 🎯 수정된 실행 방식 - RunnableConfig 사용
+            from langchain_core.runnables import RunnableConfig
+            
+            run_config = RunnableConfig(
+                callbacks=callbacks,
+                tags=["advisor_session"],
+                metadata={
+                    "session_id": "12345", 
+                    "handlers_available": len(handler_registry.list_handlers())
+                }
+            )
+            
+            # LangGraph 스트리밍 실행
             async for chunk in graph.astream(
-                {"question": question}
-                # , 
-                # config={"callbacks": callbacks}
+                {"question": question},
+                config=run_config  # RunnableConfig 객체 전달
             ):
                 # 각 노드의 출력 처리
                 for node_name, node_output in chunk.items():
-                    print(f"Node {node_name} output: {node_output}")
+                    print(f"📊 Node '{node_name}' output: {type(node_output)}")
 
-                    if node_name == "classify_main":
-                        route = node_output.get("route", "")
-                        if route == "STOCK":
-                            feedback = {"content": "📈 주식 관련 질문으로 분류되었습니다...\n\n"}
-                            yield f"data: {json.dumps(feedback, ensure_ascii=False)}\n\n"
-                        elif route == "GENERAL":
-                            feedback = {"content": "💬 일반 상담으로 분류되었습니다...\n\n"}
-                            yield f"data: {json.dumps(feedback, ensure_ascii=False)}\n\n"
+                    # 노드별 피드백 메시지
+                    node_feedback = {
+                        "classify_main": "🔍 질문 유형을 분석하고 있습니다...",
+                        "classify_stock": "📈 주식 관련 세부 분류 중...",
+                        "process_stock_with_handlers": "💼 전문 Handler가 요청을 처리하고 있습니다...",
+                        "process_general": "💭 일반 상담을 처리하고 있습니다...",
+                        "handle_error": "🔧 문제를 해결하고 있습니다..."
+                    }
+                    
+                    if node_name in node_feedback:
+                        feedback_data = {"content": f"{node_feedback[node_name]}\n\n"}
+                        yield f"data: {json.dumps(feedback_data, ensure_ascii=False)}\n\n"
+                        await asyncio.sleep(0.1)
 
-                    if node_name in ["process_stock_order", "process_stock_general", "process_general", "handle_error"]:
+                    # Handler 정보 표시
+                    if node_name == "process_stock_with_handlers" and node_output.get("handler_name"):
+                        handler_info = {"content": f"🎯 {node_output['handler_name']} Handler가 처리합니다...\n\n"}
+                        yield f"data: {json.dumps(handler_info, ensure_ascii=False)}\n\n"
+                        await asyncio.sleep(0.1)
 
-                        # 최종 결과가 있는 경우만 스트리밍
+                    # 최종 결과 처리
+                    if node_name in ["process_stock_with_handlers", "process_general", "handle_error"]:
                         final_result = node_output.get("final_result")
-                        print(f"Final result: {final_result}")
+                        
                         if final_result:
-
-                            # 타입별 이모지 추가
+                            # 타입별 이모지
                             type_emojis = {
                                 "stock_advice": "📊 ",
                                 "general_advice": "💡 ",
                                 "order_confirmation": "✅ ",
+                                "stock_price": "💰 ",
+                                "stock_analysis": "🔍 ",
                                 "error": "❌ "
                             }
-                            prefix = type_emojis.get(final_result.get("type"), "")
-                            for char in prefix:
+                            
+                            result_type = final_result.get("type", "")
+                            prefix = type_emojis.get(result_type, "📝 ")
+                            handler_name = final_result.get("handler", "")
+                            
+                            # Handler 정보와 함께 프리픽스 표시
+                            header = f"{prefix}[{handler_name}] "
+                            for char in header:
                                 yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
+                                await asyncio.sleep(0.02)
 
-                            # 결과를 적절히 스트리밍
-                            if isinstance(final_result, dict):
-                                content = final_result.get("content", "")
-                                if isinstance(content, dict):
-                                    content_str = json.dumps(content, ensure_ascii=False)
+                            # 콘텐츠 스트리밍
+                            content = final_result.get("content", "")
+                            
+                            if isinstance(content, dict):
+                                # dict인 경우 message 필드 우선 표시
+                                if "message" in content:
+                                    message = content["message"]
+                                    for char in str(message):
+                                        yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
+                                        await asyncio.sleep(0.03)
+                                else:
+                                    content_str = json.dumps(content, ensure_ascii=False, indent=2)
                                     for char in content_str:
                                         yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
-                                else:
-                                    # 문자별로 스트리밍
-                                    for char in str(content):
-                                        yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
+                                        await asyncio.sleep(0.02)
                             else:
-                                # 문자별로 스트리밍
-                                for char in str(final_result):
+                                for char in str(content):
                                     yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
+                                    await asyncio.sleep(0.03)
             
+            # 완료 메시지
+            completion_data = {"content": "\n\n🎉 상담이 완료되었습니다!"}
+            yield f"data: {json.dumps(completion_data, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
             
         except Exception as e:
-            error_data = {"content": f"오류가 발생했습니다: {str(e)}"}
+            print(f"❌ 스트리밍 오류: {e}")
+            error_data = {"content": f"❌ 시스템 오류가 발생했습니다: {str(e)}"}
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
+
+    async def get_graph_info(self):
+        """그래프 정보 조회"""
+        if not self.graph:
+            self.graph = self._create_langgraph_chain()
+            
+        return {
+            "nodes": ["classify_main", "classify_stock", "process_stock_with_handlers", "process_general", "handle_error"],
+            "handlers": handler_registry.list_handlers(),
+            "total_handlers": len(handler_registry.list_handlers()),
+            "callbacks_registered": len(self._callbacks) > 0
+        }
+    
+    async def test_handlers(self):
+        """Handler 테스트"""
+        test_classifications = [
+            {"type": "STOCK_ORDER", "stock": "삼성전자", "action": "매수", "cnt": 10},
+            {"type": "STOCK_PRICE", "stock": "LG전자"},
+            {"type": "STOCK_ANALYSIS", "stock": "카카오"},
+            {"type": "STOCK_GENERAL"},
+            {"type": "GENERAL"}
+        ]
+        
+        results = {}
+        for classification in test_classifications:
+            handler = handler_registry.get_handler(classification)
+            results[classification.get("type", "unknown")] = handler.handler_name if handler else "No handler"
+        
+        return results

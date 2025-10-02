@@ -2,90 +2,46 @@ import getpass
 import os
 from typing import Any, Dict, List
 from .advisor_types import AdvisorState
-from ...services.finanace import MarketDataManager
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import LLMResult
-from langchain_core.runnables import RunnableLambda
 from langchain.output_parsers.json import SimpleJsonOutputParser
 
-# Your existing imports
 from ..utils.promptManager import YAMLPromptManager
 from ..utils.structured_outputs import FinalStockStruct, OrderClassifier
-from ..utils.llm_tools import *
-
-load_dotenv()
+from ..handlers.handler_registry import handler_registry, initialize_handlers
 
 if not os.environ.get("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter API key for Google Gemini: ")
 
 class LoggingHandler(BaseCallbackHandler):
-    def on_chat_model_start(
-        self, serialized: Dict[str, Any], messages: List[List[BaseMessage]], **kwargs
-    ) -> None:
-        print("Chat model started")
+    def on_chat_model_start(self, serialized: Dict[str, Any], messages: List[List[BaseMessage]], **kwargs) -> None:
+        print("🤖 Chat model started")
 
     def on_llm_end(self, response: LLMResult, **kwargs) -> None:
-        print(f"Chat model ended, response: {response}")
+        print("✅ Chat model ended")
 
-    def on_chain_start(
-        self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs
-    ) -> None:
-        print(f"Chain {serialized.get('name')} started")
+    def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs) -> None:
+        print(f"🔗 Chain '{serialized.get('name')}' started")
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs) -> None:
-        print(f"Chain ended, outputs: {outputs}")
+        print("🏁 Chain ended")
 
-callbacks = [LoggingHandler()]
+# 전역 변수 초기화
 model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
 json_parser = SimpleJsonOutputParser()
 structured_llm = model.with_structured_output(FinalStockStruct)
 yaml_prompt_manager = YAMLPromptManager()
 
-def format_stock_response(response):
-    """주식 응답 포맷팅"""
-    return {
-        **response,
-        "type": "stock_advice",
-        "category": "investment"
-    }
-
-def format_general_response(response):
-    """일반 응답 포맷팅"""
-    return {
-        **response,
-        "type": "general_advice",
-        "category": "general"
-    }
-
-def format_order_response(response):
-
-    """주문 응답 포맷팅"""
-    return {
-        **response,
-        "type": "order_confirmation",
-        "category": "transaction"
-    }
-
+# 분류기들
 classifier = yaml_prompt_manager.create_chat_prompt("stock_general_branch_prompt") | model
 stock_classifier = yaml_prompt_manager.create_chat_prompt("stock_order_branch") | model.with_structured_output(OrderClassifier)
 
-
-# 프롬프트 함수들
-def stock_prompt(question: str):
-    context = 'test입니다'
-    prompt = yaml_prompt_manager.create_chat_prompt("stock_advisor", context=context, question=question)
-    return prompt
-
-def general_prompt(question: str):
-    context = 'test입니다'
-    prompt = yaml_prompt_manager.create_chat_prompt("general_advisor", context=context, question=question)
-    return prompt
-
-# 분류기들
+# Handler들 초기화
+initialize_handlers(model, structured_llm, json_parser)
 
 def classify_main(state: AdvisorState) -> AdvisorState:
     """1차 분류: STOCK vs GENERAL"""
@@ -102,88 +58,67 @@ def classify_main(state: AdvisorState) -> AdvisorState:
             "route": route
         }
     except Exception as e:
+        print(f"❌ Main classification error: {e}")
         return {**state, "error": str(e), "route": "ERROR"}
 
 def classify_stock(state: AdvisorState) -> AdvisorState:
-    """2차 분류: STOCK_ORDER vs STOCK_GENERAL"""
+    """2차 분류: 세부 주식 기능 분류"""
     try:
         question = state["question"]
         stock_result = stock_classifier.invoke({"question": question})
         
-        stock_type = stock_result.get("type", "").upper()
-        
         return {
             **state,
             "stock_classification": stock_result,
-            "route": stock_type
+            "route": "STOCK_HANDLER"
         }
     except Exception as e:
+        print(f"❌ Stock classification error: {e}")
         return {**state, "error": str(e), "route": "ERROR"}
 
-def process_stock_order(state: AdvisorState) -> AdvisorState:
-    """STOCK_ORDER 처리"""
+async def process_stock_with_handlers(state: AdvisorState) -> AdvisorState:
+    """Handler 패턴을 사용하는 동적 주식 처리 노드"""
     try:
-        question = state["question"]
-        classification = state["stock_classification"]
-
-        def create_order_prompt(data):
-            stock_info = f"주식: {data['stock']}, 액션: {data['action']}, 타입: {data['type']}"
-            prompt = yaml_prompt_manager.create_chat_prompt(
-                "stock_advisor",  # 기존 프롬프트 사용 또는 새로운 주문 프롬프트 생성
-                context=f"주식 주문 정보: {stock_info}",
-                question=f"{question} - 위 정보를 바탕으로 주문을 처리해주세요."
-            )
-            return prompt
+        classification = state.get("stock_classification", {})
         
-        # parsed_data = parse_stock_info(classification)
-        result = (RunnableLambda(create_order_prompt) | structured_llm | order_stock_handler | RunnableLambda(format_order_response)).invoke(classification)
-        print(f"result : {result}")
+        # 적절한 Handler 선택
+        handler = handler_registry.get_handler(classification)
         
-        return {**state, "final_result": result,"type":"order_confirmation"}
+        if handler:
+            print(f"🎯 선택된 Handler: {handler.handler_name}")
+            return await handler.handle(state)
+        else:
+            raise Exception("적절한 Handler를 찾을 수 없습니다")
+            
     except Exception as e:
-        return {**state, "error": str(e)}
-
-def process_stock_general(state: AdvisorState) -> AdvisorState:
-    """STOCK_GENERAL 처리"""
-    try:
-        question = state["question"]
-        result = (stock_prompt(question) | model | json_parser | RunnableLambda(format_stock_response)).invoke({"question": question})
-
-        return {**state, "final_result": result,"type":"stock_advice"}
-    except Exception as e:
+        print(f"❌ Handler processing error: {e}")
         return {**state, "error": str(e)}
 
 def process_general(state: AdvisorState) -> AdvisorState:
-    """GENERAL 처리"""
+    """일반 상담 처리"""
     try:
-        question = state["question"]
-        result = (general_prompt(question) | model | json_parser | RunnableLambda(format_general_response)).invoke({"question": question})
-
-        return {**state, "final_result": result,"type":"general_advice"}
+        # 일반 상담도 Handler를 통해 처리
+        handler = handler_registry.get_handler_by_name("general_advice")
+        
+        if handler:
+            # 동기 처리를 위해 asyncio 사용
+            import asyncio
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(handler.handle(state))
+        else:
+            raise Exception("General advice handler를 찾을 수 없습니다")
+            
     except Exception as e:
+        print(f"❌ General processing error: {e}")
         return {**state, "error": str(e)}
 
 def handle_error(state: AdvisorState) -> AdvisorState:
     """에러 처리"""
+    error_message = state.get('error', '알 수 없는 오류')
     error_result = {
-        "content": f"오류가 발생했습니다: {state.get('error', '알 수 없는 오류')}",
-        "type": "error"
+        "content": f"오류가 발생했습니다: {error_message}",
+        "type": "error",
+        "category": "system_error",
+        "handler": "error_handler"
     }
     return {**state, "final_result": error_result}
-
-# order_stock 함수 수정: FinalStockStruct를 받도록 변경
-def order_stock_handler(structured_result: FinalStockStruct) -> dict:
-    """structured_llm 결과에서 주문 처리"""
-    data = structured_result['content']
-
-    market_manager = MarketDataManager()
-    symbol = market_manager.search_korean_stock_symbol(data.get('stock'))
-    print(f"symbol : {symbol}")
-    data1 = market_manager.get_stock_data(symbol)
-    print(f"data1 : {data1}")
-
-    return {
-        "status": "success",
-        "content": f"{data.get('stock')} {int(data.get('cnt'))} 주 {data.get('action')} 주문 완료",
-        "structured_result": structured_result
-    }
