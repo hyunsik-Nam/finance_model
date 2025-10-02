@@ -1,4 +1,5 @@
 # import openai
+import os
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -13,26 +14,15 @@ from PyQt5.QtWidgets import QApplication
 import sys
 import pythoncom
 
-class Kiwoom:
-    def __init__(self):
-        self.ocx = QAxWidget("KHOPENAPI.KHOpenAPICtrl.1")
-        self.ocx.OnEventConnect.connect(self.OnEventConnect)
-        self.login = False
 
-    def CommConnect(self):
-        self.ocx.dynamicCall("CommConnect()")
-        while self.login is False:
-            pythoncom.PumpWaitingMessages()
-
-    def OnEventConnect(self, code):
-        self.login = True
-        print("login is done", code)
+base_url = os.getenv("KIWOOM_BASE_URL", "http://localhost:8080/api/v1/kiwoom/")
 
 class MarketDataManager:
     """시장 데이터 관리 클래스"""
     
     def __init__(self):
         self.data_cache = {}
+        self._base_url = base_url
         
     def get_stock_data(self, symbol: str, period: str = "3mo") -> pd.DataFrame:
         """주식 데이터 조회"""
@@ -53,17 +43,29 @@ class MarketDataManager:
             return info.get('currentPrice', 0)
         except:
             return 0
-        
-    def search_korean_stock_symbol(stock_name: str) -> str:
+
+    def search_korean_stock_symbol(self, stock_name: str) -> str:
+        print(f"search_korean_stock_symbol called with stock_name: {stock_name}")
         """한국투자증권 API나 다른 서비스로 검색"""
         # 예시: 한국투자증권 API (실제로는 인증 필요)
         try:
             # API 호출 예시 (실제 구현 시 API 키 필요)
-            url = f"https://api.example.com/search?q={stock_name}"
-            response = requests.get(url)
+            url = f"{self._base_url}stock_info/{stock_name}"
+            print(f"API 호출 URL: {url}")
+            response = requests.get(url, timeout=10)
+            print(f"응답 상태 코드: {response.status_code}")
+            print(f"응답 내용: {response.text}")
+
             if response.status_code == 200:
                 data = response.json()
-                return data.get('symbol', f"{stock_name}.KS")
+                print(f"파싱된 데이터: {data}")
+                symbol = data.get('symbol', f"{stock_name}.KS")
+                print(f"반환할 심볼: {symbol}")
+                return symbol
+            else:
+                print(f"API 호출 실패: {response.status_code}")
+                return f"{stock_name}.KS"
+            
         except:
             pass
 
