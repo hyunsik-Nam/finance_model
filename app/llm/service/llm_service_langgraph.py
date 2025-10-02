@@ -174,12 +174,14 @@ class LLMServiceGraph:
                     }
                     
                     if node_name in node_feedback:
+                        print("@@@@@@@@1")
                         feedback_data = {"content": f"{node_feedback[node_name]}\n\n"}
                         yield f"data: {json.dumps(feedback_data, ensure_ascii=False)}\n\n"
                         await asyncio.sleep(0.1)
 
                     # Handler 정보 표시
                     if node_name == "process_stock_with_handlers" and node_output.get("handler_name"):
+                        print("@@@@@@@@2")
                         handler_info = {"content": f"🎯 {node_output['handler_name']} Handler가 처리합니다...\n\n"}
                         yield f"data: {json.dumps(handler_info, ensure_ascii=False)}\n\n"
                         await asyncio.sleep(0.1)
@@ -187,6 +189,8 @@ class LLMServiceGraph:
                     # 최종 결과 처리
                     if node_name in ["process_stock_with_handlers", "process_general", "handle_error"]:
                         final_result = node_output.get("final_result")
+                        print(f"@@@@@@@2 node_output: {node_output}")
+                        print(f"@@@@@@@3 final_result: {final_result}")
                         
                         if final_result:
                             # 타입별 이모지

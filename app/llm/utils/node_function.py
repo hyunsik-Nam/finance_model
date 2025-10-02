@@ -48,6 +48,7 @@ def classify_main(state: AdvisorState) -> AdvisorState:
     """1차 분류: STOCK vs GENERAL"""
     try:
         question = state["question"]
+        print(f"🔍 Main classification for question: {question}")
         main_result = classifier.invoke({"question": question})
         
         is_stock = "STOCK" in main_result.content.upper()

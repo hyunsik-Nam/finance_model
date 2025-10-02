@@ -87,17 +87,33 @@ class StockPriceHandler(BaseHandler):
             question = state["question"]
             stock_name = self._extract_stock_name(question)
             
-            symbol = await self.market_manager.search_korean_stock_symbol(stock_name)
-            current_price = await self.market_manager.get_real_time_price(symbol)
-            stock_data = await self.market_manager.get_stock_data(symbol)
+            print(f"Extracted stock name: {stock_name}")
             
-            content = {
-                "message": f"{stock_name}의 현재가는 {current_price:,.0f}원입니다.",
-                "stock_name": stock_name,
-                "symbol": symbol,
-                "current_price": current_price,
-                "stock_data": stock_data.tail(10).to_dict() if not stock_data.empty else {}
-            }
+            stock_data = await self.market_manager.search_korean_stock_symbol(stock_name)
+            
+            print(f"@@@@: {stock_data}")
+
+            if stock_data and len(stock_data) > 0:
+                stock_info = stock_data[0]
+                current_price_str = stock_info.get('현재가', '0').replace('+', '').replace('-', '').replace(',', '')
+                current_price = int(current_price_str) if current_price_str.isdigit() else 0
+                
+                content = {
+                    "message": f"{stock_info.get('종목명', stock_name)}의 현재가는 {current_price:,}원입니다.",
+                    "stock_name": stock_info.get('종목명', stock_name),
+                    "current_price": current_price,
+                    "previous_close": stock_info.get('기준가', ''),
+                    "change": stock_info.get('전일대비', ''),
+                    "volume": stock_info.get('거래량', ''),
+                    "stock_data": stock_info
+                }
+            else:
+                content = {
+                    "message": f"{stock_name}의 주가 정보를 찾을 수 없습니다.",
+                    "stock_name": stock_name,
+                    "current_price": 0,
+                    "stock_data": {}
+                }
             
             formatted_result = self._format_response(content, "stock_price", "inquiry")
             
@@ -122,7 +138,7 @@ class StockPriceHandler(BaseHandler):
             if match:
                 return match.group(1).strip()
         
-        return "삼성전자"  # 기본값
+        return ""  # 기본값
     
     @property
     def handler_name(self) -> str:
@@ -187,7 +203,7 @@ class StockAnalysisHandler(BaseHandler):
             if match:
                 return match.group(1).strip()
         
-        return "삼성전자"
+        return ""
     
     @property
     def handler_name(self) -> str:

@@ -8,7 +8,7 @@ class OrderClassifier(TypedDict):
     stock: Annotated[str, ..., "주식 설정 정보", "example=삼성전자, 애플"]
     qty: Annotated[str, ..., "주식 수량", "example=10"]
     action: Annotated[str, ..., "주식 주문 액션", "example=BUY, SELL"]
-    type: Annotated[str, ..., "주식 주문인지 주식관련 질문인지", "example=STOCK_ORDER, STOCK_GENERAL"]
+    type: Annotated[str, ..., "주식 주문인지 주식관련 질문인지", "example=STOCK_ORDER, STOCK_GENERAL, STOCK_PRICE, STOCK_ANALYSIS"]
 
 class StockStruct(TypedDict):
     """ 주식정보를 담는 데이터 구조 """

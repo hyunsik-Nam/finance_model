@@ -13,8 +13,9 @@ from PyQt5.QAxContainer import QAxWidget
 from PyQt5.QtWidgets import QApplication
 import sys
 import pythoncom
+import logging
 
-
+logger = logging.getLogger(__name__)
 base_url = os.getenv("KIWOOM_BASE_URL", "http://localhost:8080/api/v1/kiwoom/")
 
 class MarketDataManager:
@@ -23,6 +24,15 @@ class MarketDataManager:
     def __init__(self):
         self.data_cache = {}
         self._base_url = base_url
+
+    async def _getSession(self) -> aiohttp.ClientSession:
+        """HTTP 세션 관리"""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10),
+                connector=aiohttp.TCPConnector(limit=10)
+            )
+        return self._session
         
     def get_stock_data(self, symbol: str, period: str = "3mo") -> pd.DataFrame:
         """주식 데이터 조회"""
@@ -44,28 +54,21 @@ class MarketDataManager:
         except:
             return 0
 
-    def search_korean_stock_symbol(self, stock_name: str) -> str:
+    async def search_korean_stock_symbol(self, stock_name: str) -> str:
         print(f"search_korean_stock_symbol called with stock_name: {stock_name}")
-        """한국투자증권 API나 다른 서비스로 검색"""
-        # 예시: 한국투자증권 API (실제로는 인증 필요)
         try:
-            # API 호출 예시 (실제 구현 시 API 키 필요)
-            url = f"{self._base_url}stock_info/{stock_name}"
-            print(f"API 호출 URL: {url}")
-            response = requests.get(url, timeout=10)
-            print(f"응답 상태 코드: {response.status_code}")
-            print(f"응답 내용: {response.text}")
-
-            if response.status_code == 200:
-                data = response.json()
-                print(f"파싱된 데이터: {data}")
-                symbol = data.get('symbol', f"{stock_name}.KS")
-                print(f"반환할 심볼: {symbol}")
-                return symbol
-            else:
-                print(f"API 호출 실패: {response.status_code}")
-                return f"{stock_name}.KS"
+            session = await self._getSession()
+            url = f"{self._baseUrl}stock_info/{stock_name}"
             
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.info(f"파싱된 데이터: {data}")
+                    return data
+                else:
+                    logger.warning(f"API 호출 실패: {response.status}")
+                    return f"{stock_name}.KS"
+                    
         except:
             pass
 

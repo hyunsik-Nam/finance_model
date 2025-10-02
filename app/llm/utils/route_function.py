@@ -19,6 +19,8 @@ def route_after_stock_classification(state: AdvisorState) -> Literal["process_st
     print(f"🔀 Stock classification route: {route}")
     
     if route == "ERROR":
+        print("🔀 Routing to err!!")
         return "handle_error"
     else:
+        print("🔀 Routing to process_stock_with_handlers")
         return "process_stock_with_handlers"
